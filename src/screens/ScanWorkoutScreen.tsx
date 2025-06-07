@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput } from 'react-native';
-import { Camera } from 'expo-camera';
+import {
+  SafeAreaView,
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+  TextInput,
+  Image,
+  Linking,
+  Platform,
+} from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Workout, WorkoutSuggestion } from '../types';
 import { saveWorkout } from '../utils/storage';
 
@@ -14,122 +25,177 @@ const mockAIResponse = (): WorkoutSuggestion => ({
   strategy: "Aim for 1 round every 2 minutes. Keep squats unbroken. Rest max 15 seconds."
 });
 
+const CameraView = ({ onCapture }: { onCapture: () => void }) => {
+  const takePicture = async () => {
+    try {
+      // First check if we have permission
+      const { status: existingStatus } = await ImagePicker.getCameraPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      // If we don't have permission, request it
+      if (existingStatus !== 'granted') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        finalStatus = status;
+      }
+
+      // If we still don't have permission, show an alert
+      if (finalStatus !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Camera permission is required to take pictures. Please enable it in your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Settings',
+              onPress: () => {
+                if (Platform.OS === 'ios') {
+                  Linking.openURL('app-settings:');
+                } else {
+                  Linking.openSettings();
+                }
+              }
+            }
+          ]
+        );
+        return;
+      }
+
+      // If we have permission, launch the camera
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.5,
+      });
+
+      if (!result.canceled) {
+        console.log('Picture taken:', result.assets[0]);
+        onCapture();
+      }
+    } catch (error) {
+      console.error('Error taking picture:', error);
+      Alert.alert('Error', 'Failed to take picture. Please try again.');
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.cameraPlaceholder}>
+        <Text style={styles.cameraPlaceholderText}>Camera View</Text>
+      </View>
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity 
+          style={styles.captureButton} 
+          onPress={takePicture}
+        />
+      </View>
+    </View>
+  );
+};
+
 export const ScanWorkoutScreen = () => {
-  console.log('Component rendering');
-  
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [suggestion, setSuggestion] = useState<WorkoutSuggestion | null>(null);
   const [result, setResult] = useState('');
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
 
   useEffect(() => {
-    console.log('useEffect triggered - checking camera permission');
-    checkCameraPermission();
+    checkPermissions();
   }, []);
 
-  const checkCameraPermission = async () => {
-    console.log('Checking camera permission...');
+  const checkPermissions = async () => {
     try {
-      const { status } = await Camera.getCameraPermissionsAsync();
-      console.log('Current camera permission status:', status);
+      const { status } = await ImagePicker.getCameraPermissionsAsync();
       setHasPermission(status === 'granted');
     } catch (error) {
-      console.error('Error checking camera permission:', error);
+      console.error('Error checking permissions:', error);
+      setHasPermission(false);
     }
   };
 
-  const requestCameraPermission = async () => {
-    console.log('Requesting camera permission...');
+  const requestPermissions = async () => {
     try {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      console.log('Camera permission request result:', status);
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
       setHasPermission(status === 'granted');
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Camera permission is required to take pictures. Please enable it in your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Settings',
+              onPress: () => {
+                if (Platform.OS === 'ios') {
+                  Linking.openURL('app-settings:');
+                } else {
+                  Linking.openSettings();
+                }
+              }
+            }
+          ]
+        );
+      }
     } catch (error) {
-      console.error('Error requesting camera permission:', error);
+      console.error('Error requesting permissions:', error);
+      setHasPermission(false);
     }
   };
 
-  const handleCapture = async () => {
-    console.log('Capture button pressed');
-    try {
-      const mockResponse = mockAIResponse();
-      console.log('Setting suggestion:', mockResponse);
-      setSuggestion(mockResponse);
-    } catch (error) {
-      console.error('Error capturing workout:', error);
-    }
+  const handleCapture = () => {
+    setSuggestion(mockAIResponse());
   };
 
   const handleEndWorkout = () => {
-    console.log('End workout button pressed');
-    console.log('Current result:', result);
-    
     if (!result.trim()) {
-      console.log('No result entered, showing error');
       Alert.alert("Error", "Please enter your workout result");
       return;
     }
 
-    try {
-      const workout: Workout = {
-        id: Date.now().toString(),
-        date: new Date().toISOString(),
-        description: suggestion?.workout || '',
-        weights: suggestion?.suggestedWeights || {},
-        result: result,
-        goal: suggestion?.goal,
-        strategy: suggestion?.strategy
-      };
-      
-      console.log('Saving workout:', workout);
-      saveWorkout(workout);
-      
-      setSuggestion(null);
-      setResult('');
-      console.log('Workout saved successfully');
-      Alert.alert("Success", "Workout saved successfully!");
-    } catch (error) {
-      console.error('Error saving workout:', error);
-    }
+    const workout: Workout = {
+      id: Date.now().toString(),
+      date: new Date().toISOString(),
+      description: suggestion?.workout || '',
+      weights: suggestion?.suggestedWeights || {},
+      result: result,
+      goal: suggestion?.goal,
+      strategy: suggestion?.strategy
+    };
+
+    saveWorkout(workout);
+    setSuggestion(null);
+    setResult('');
+    Alert.alert("Success", "Workout saved successfully!");
   };
 
-  console.log('Current state:', { hasPermission, suggestion: !!suggestion, result });
-
   if (hasPermission === null) {
-    console.log('Rendering permission request view');
     return (
-      <View style={styles.container}>
-        <Text>Requesting camera permission...</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
+          <Text>Requesting camera permission...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (hasPermission === false) {
-    console.log('Rendering no permission view');
     return (
-      <View style={styles.container}>
-        <TouchableOpacity 
-          style={[styles.button, { marginTop: 20 }]} 
-          onPress={requestCameraPermission}
-        >
-          <Text style={styles.buttonText}>Request Camera Permission</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
+          <TouchableOpacity 
+            style={[styles.button, { marginTop: 20 }]} 
+            onPress={requestPermissions}
+          >
+            <Text style={styles.buttonText}>Request Camera Permission</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  console.log('Rendering main view');
-  return (
-    <View style={styles.container}>
-      {!suggestion ? (
-        <View style={styles.container}>
-          <Camera style={styles.camera} />
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.button} onPress={handleCapture}>
-              <Text style={styles.buttonText}>Capture Workout</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : (
+  if (suggestion) {
+    return (
+      <SafeAreaView style={styles.container}>
         <View style={styles.suggestionContainer}>
           <Text style={styles.title}>Workout Suggestion</Text>
           <Text style={styles.workoutText}>{suggestion.workout}</Text>
@@ -140,30 +206,37 @@ export const ScanWorkoutScreen = () => {
             style={styles.input}
             placeholder="Enter your result (e.g., 4 rounds + 12 reps)"
             value={result}
-            onChangeText={(text) => {
-              console.log('Result input changed:', text);
-              setResult(text);
-            }}
+            onChangeText={setResult}
           />
           
           <TouchableOpacity style={styles.button} onPress={handleEndWorkout}>
             <Text style={styles.buttonText}>End Workout</Text>
           </TouchableOpacity>
         </View>
-      )}
-    </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <CameraView onCapture={handleCapture} />
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  cameraPlaceholder: {
+    flex: 1,
+    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  camera: {
-    flex: 1,
-    width: '100%',
+  cameraPlaceholderText: {
+    color: '#fff',
+    fontSize: 18,
   },
   buttonContainer: {
     position: 'absolute',
@@ -171,6 +244,14 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'center',
+  },
+  captureButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#fff',
+    borderWidth: 5,
+    borderColor: '#2196F3',
   },
   button: {
     backgroundColor: '#2196F3',
@@ -187,7 +268,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     backgroundColor: '#f5f5f5',
-    width: '100%',
   },
   title: {
     fontSize: 24,
