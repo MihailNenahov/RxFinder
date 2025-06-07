@@ -4,8 +4,6 @@ import { Camera } from 'expo-camera';
 import { Workout, WorkoutSuggestion } from '../types';
 import { saveWorkout } from '../utils/storage';
 
-const CameraComponent = Camera as any;
-
 // Mock AI response
 const mockAIResponse = (): WorkoutSuggestion => ({
   workout: "AMRAP 10 min: 10 Power Cleans (40kg), 15 Push-ups, 20 Air Squats",
@@ -17,7 +15,7 @@ const mockAIResponse = (): WorkoutSuggestion => ({
 });
 
 export const ScanWorkoutScreen = () => {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(false);
   const [suggestion, setSuggestion] = useState<WorkoutSuggestion | null>(null);
   const [result, setResult] = useState('');
 
@@ -71,23 +69,24 @@ export const ScanWorkoutScreen = () => {
     );
   };
 
-  if (hasPermission === null) {
+  if (!hasPermission) {
     return <View style={styles.container}><Text>Requesting camera permission...</Text></View>;
   }
-  if (hasPermission === false) {
+  if (hasPermission) {
     return <View style={styles.container}><Text>No access to camera</Text></View>;
   }
 
   return (
     <View style={styles.container}>
       {!suggestion ? (
-        <CameraComponent style={styles.camera}>
+        <View style={styles.container}>
+          <Camera style={styles.camera} />
           <View style={styles.buttonContainer}>
             <TouchableOpacity style={styles.button} onPress={handleCapture}>
               <Text style={styles.buttonText}>Capture Workout</Text>
             </TouchableOpacity>
           </View>
-        </CameraComponent>
+        </View>
       ) : (
         <View style={styles.suggestionContainer}>
           <Text style={styles.title}>Workout Suggestion</Text>
