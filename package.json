@@ -2,6 +2,12 @@
   "name": "rxfinder",
   "version": "1.0.0",
   "main": "index.js",
+  "exports": {
+    ".": {
+      "import": "./node_modules/@google/genai/web/index.js",
+      "require": "./node_modules/@google/genai/node/index.js"
+    }
+  },
   "scripts": {
     "start": "expo start",
     "start:clean": "expo start -c",
@@ -11,16 +17,18 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
+    "@google/genai": "^1.4.0",
+    "@google/generative-ai": "^0.24.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-navigation/bottom-tabs": "^7.3.14",
     "@react-navigation/native": "^7.1.10",
     "expo": "~53.0.10",
+    "expo-camera": "^16.1.7",
     "expo-image-picker": "^16.1.4",
     "expo-secure-store": "^14.2.3",
     "expo-status-bar": "~2.2.3",
     "react": "19.0.0",
     "react-native": "0.79.3",
-    "react-native-camera": "^4.2.1",
     "react-native-safe-area-context": "^5.4.1",
     "react-native-screens": "^4.11.1"
   },

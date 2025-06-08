@@ -10,22 +10,14 @@ import {
   Image,
   Linking,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Workout, WorkoutSuggestion } from '../types';
 import { saveWorkout } from '../utils/storage';
+import { analyzeWorkoutWithPhoto } from '../utils/ai';
 
-// Mock AI response for testing
-const mockAIResponse = (): WorkoutSuggestion => ({
-  workout: "AMRAP 10 min: 10 Power Cleans (40kg), 15 Push-ups, 20 Air Squats",
-  goal: "5+ rounds in under 10 min",
-  suggestedWeights: {
-    clean: "45kg",
-  },
-  strategy: "Aim for 1 round every 2 minutes. Keep squats unbroken. Rest max 15 seconds."
-});
-
-const CameraView = ({ onCapture }: { onCapture: () => void }) => {
+const CameraView = ({ onCapture }: { onCapture: (imageUri: string) => void }) => {
   const takePicture = async () => {
     try {
       // First check if we have permission
@@ -70,7 +62,7 @@ const CameraView = ({ onCapture }: { onCapture: () => void }) => {
 
       if (!result.canceled) {
         console.log('Picture taken:', result.assets[0]);
-        onCapture();
+        onCapture(result.assets[0].uri);
       }
     } catch (error) {
       console.error('Error taking picture:', error);
@@ -96,7 +88,9 @@ const CameraView = ({ onCapture }: { onCapture: () => void }) => {
 export const ScanWorkoutScreen = () => {
   const [suggestion, setSuggestion] = useState<WorkoutSuggestion | null>(null);
   const [result, setResult] = useState('');
+  const [userFeedback, setUserFeedback] = useState('');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     checkPermissions();
@@ -142,8 +136,32 @@ export const ScanWorkoutScreen = () => {
     }
   };
 
-  const handleCapture = () => {
-    setSuggestion(mockAIResponse());
+  const handleCapture = async (imageUri: string) => {
+    setIsLoading(true);
+    try {
+      // TODO: Replace with actual user profile data
+      const userProfile = {
+        sex: "male",
+        age: 28,
+        bodyWeight: 78,
+        capacities: {
+          strength: 6.5,
+          power: 6.0,
+          muscularEndurance: 5.5,
+          aerobicCapacity: 5.0,
+          anaerobicCapacity: 6.5,
+          gymnasticsSkill: 5.5,
+        },
+      };
+
+      const aiResponse = await analyzeWorkoutWithPhoto(imageUri, userProfile);
+      setSuggestion(aiResponse);
+    } catch (error) {
+      console.error('Error analyzing workout:', error);
+      Alert.alert('Error', 'Failed to analyze workout. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleEndWorkout = () => {
@@ -159,12 +177,14 @@ export const ScanWorkoutScreen = () => {
       weights: suggestion?.suggestedWeights || {},
       result: result,
       goal: suggestion?.goal,
-      strategy: suggestion?.strategy
+      strategy: suggestion?.strategy,
+      userFeedback: userFeedback,
     };
 
     saveWorkout(workout);
     setSuggestion(null);
     setResult('');
+    setUserFeedback('');
     Alert.alert("Success", "Workout saved successfully!");
   };
 
@@ -193,6 +213,17 @@ export const ScanWorkoutScreen = () => {
     );
   }
 
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2196F3" />
+          <Text style={styles.loadingText}>Analyzing workout...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (suggestion) {
     return (
       <SafeAreaView style={styles.container}>
@@ -207,6 +238,13 @@ export const ScanWorkoutScreen = () => {
             placeholder="Enter your result (e.g., 4 rounds + 12 reps)"
             value={result}
             onChangeText={setResult}
+          />
+          
+          <TextInput
+            style={styles.input}
+            placeholder="How did it feel? (e.g., Thrusters were tough, pull-ups unbroken, breathing hard at the end)"
+            value={userFeedback}
+            onChangeText={setUserFeedback}
           />
           
           <TouchableOpacity style={styles.button} onPress={handleEndWorkout}>
@@ -295,5 +333,15 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#ddd',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
   },
 });

@@ -16,6 +16,7 @@ export interface Workout {
   result: string;
   goal?: string;
   strategy?: string;
+  userFeedback?: string;
 }
 
 export interface WorkoutSuggestion {
