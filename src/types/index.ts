@@ -4,6 +4,14 @@ export interface UserProfile {
   sex: 'male' | 'female';
   age: number;
   weight: number;
+  capacities?: {
+    strength: number;
+    power: number;
+    muscularEndurance: number;
+    aerobicCapacity: number;
+    anaerobicCapacity: number;
+    gymnasticsSkill: number;
+  };
 }
 
 export interface Workout {

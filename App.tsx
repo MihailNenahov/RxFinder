@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { ScanWorkoutScreen } from './src/screens/ScanWorkoutScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { Ionicons } from '@expo/vector-icons';
+import { getUserProfile, saveUserProfile } from './src/utils/storage';
+import { UserProfile } from './src/types';
 
 const Tab = createBottomTabNavigator();
 

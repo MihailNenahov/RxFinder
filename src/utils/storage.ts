@@ -6,19 +6,40 @@ const WORKOUTS_KEY = '@workouts';
 
 export const saveUserProfile = async (profile: UserProfile): Promise<void> => {
   try {
-    await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+    // Always store age and weight as numbers
+    const normalizedProfile = {
+      ...profile,
+      age: Number(profile.age),
+      weight: Number(profile.weight),
+    };
+    console.log('Saving user profile:', normalizedProfile);
+    const profileString = JSON.stringify(normalizedProfile);
+    console.log('Serialized profile:', profileString);
+    await AsyncStorage.setItem(USER_PROFILE_KEY, profileString);
+    console.log('Profile saved successfully');
   } catch (error) {
     console.error('Error saving user profile:', error);
+    throw error; // Re-throw to handle in the calling code
   }
 };
 
 export const getUserProfile = async (): Promise<UserProfile | null> => {
   try {
+    console.log('Getting user profile...');
     const profile = await AsyncStorage.getItem(USER_PROFILE_KEY);
-    return profile ? JSON.parse(profile) : null;
+    console.log('Raw profile from storage:', profile);
+    
+    if (!profile) {
+      console.log('No profile found in storage');
+      return null;
+    }
+    
+    const parsedProfile = JSON.parse(profile);
+    console.log('Parsed profile:', parsedProfile);
+    return parsedProfile;
   } catch (error) {
     console.error('Error getting user profile:', error);
-    return null;
+    throw error; // Re-throw to handle in the calling code
   }
 };
 
@@ -29,6 +50,7 @@ export const saveWorkout = async (workout: Workout): Promise<void> => {
     await AsyncStorage.setItem(WORKOUTS_KEY, JSON.stringify(updatedWorkouts));
   } catch (error) {
     console.error('Error saving workout:', error);
+    throw error;
   }
 };
 
@@ -38,6 +60,6 @@ export const getWorkouts = async (): Promise<Workout[] | null> => {
     return workouts ? JSON.parse(workouts) : [];
   } catch (error) {
     console.error('Error getting workouts:', error);
-    return null;
+    throw error;
   }
 }; 

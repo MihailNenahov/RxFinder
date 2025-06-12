@@ -13,9 +13,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Workout, WorkoutSuggestion } from '../types';
-import { saveWorkout } from '../utils/storage';
-import { analyzeWorkoutWithPhoto } from '../utils/ai';
+import { Workout, WorkoutSuggestion, UserProfile } from '../types';
+import { saveWorkout, getUserProfile, saveUserProfile } from '../utils/storage';
+import { analyzeWorkoutWithPhoto, updateAthleteProfileWithAI } from '../utils/ai';
 
 const CameraView = ({ onCapture }: { onCapture: (imageUri: string) => void }) => {
   const takePicture = async () => {
@@ -91,9 +91,15 @@ export const ScanWorkoutScreen = () => {
   const [userFeedback, setUserFeedback] = useState('');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     checkPermissions();
+    const loadProfile = async () => {
+      const profile = await getUserProfile();
+      setUserProfile(profile);
+    };
+    loadProfile();
   }, []);
 
   const checkPermissions = async () => {
@@ -139,22 +145,13 @@ export const ScanWorkoutScreen = () => {
   const handleCapture = async (imageUri: string) => {
     setIsLoading(true);
     try {
-      // TODO: Replace with actual user profile data
-      const userProfile = {
-        sex: "male",
-        age: 28,
-        bodyWeight: 78,
-        capacities: {
-          strength: 6.5,
-          power: 6.0,
-          muscularEndurance: 5.5,
-          aerobicCapacity: 5.0,
-          anaerobicCapacity: 6.5,
-          gymnasticsSkill: 5.5,
-        },
-      };
-
-      const aiResponse = await analyzeWorkoutWithPhoto(imageUri, userProfile);
+      if (!userProfile) throw new Error('User profile not loaded');
+      const aiResponse = await analyzeWorkoutWithPhoto(imageUri, {
+        sex: userProfile.sex,
+        age: userProfile.age,
+        bodyWeight: userProfile.weight,
+        capacities: userProfile.capacities!,
+      });
       setSuggestion(aiResponse);
     } catch (error) {
       console.error('Error analyzing workout:', error);
@@ -164,28 +161,90 @@ export const ScanWorkoutScreen = () => {
     }
   };
 
-  const handleEndWorkout = () => {
+  const handleEndWorkout = async () => {
+    console.log('handleEndWorkout: started');
     if (!result.trim()) {
       Alert.alert("Error", "Please enter your workout result");
       return;
     }
+    setIsLoading(true);
+    try {
+      const workout: Workout = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        description: suggestion?.workout || '',
+        weights: suggestion?.suggestedWeights || {},
+        result: result,
+        goal: suggestion?.goal,
+        strategy: suggestion?.strategy,
+        userFeedback: userFeedback,
+      };
 
-    const workout: Workout = {
-      id: Date.now().toString(),
-      date: new Date().toISOString(),
-      description: suggestion?.workout || '',
-      weights: suggestion?.suggestedWeights || {},
-      result: result,
-      goal: suggestion?.goal,
-      strategy: suggestion?.strategy,
-      userFeedback: userFeedback,
-    };
+      await saveWorkout(workout);
 
-    saveWorkout(workout);
-    setSuggestion(null);
-    setResult('');
-    setUserFeedback('');
-    Alert.alert("Success", "Workout saved successfully!");
+      // Update athlete profile with AI
+      const userProfile = await getUserProfile();
+      if (userProfile && suggestion && userProfile.capacities) {
+        console.log('Calling updateAthleteProfileWithAI with:', {
+          user: {
+            sex: userProfile.sex,
+            age: userProfile.age,
+            bodyWeight: userProfile.weight,
+            capacities: userProfile.capacities,
+          },
+          workout: {
+            parsedWorkout: suggestion.workout,
+            recommendedWeights: suggestion.suggestedWeights,
+            goal: suggestion.goal,
+          },
+          performance: {
+            result: result,
+            userFeedback: userFeedback,
+          },
+        });
+        const updatedCapacities = await updateAthleteProfileWithAI({
+          user: {
+            sex: userProfile.sex,
+            age: userProfile.age,
+            bodyWeight: userProfile.weight,
+            capacities: userProfile.capacities,
+          },
+          workout: {
+            parsedWorkout: suggestion.workout,
+            recommendedWeights: suggestion.suggestedWeights,
+            goal: suggestion.goal,
+          },
+          performance: {
+            result: result,
+            userFeedback: userFeedback,
+          },
+        });
+        console.log('AI returned updated capacities:', updatedCapacities);
+        console.log('Profile before update:', userProfile);
+        const newProfile = {
+          ...userProfile,
+          capacities: {
+            ...userProfile.capacities,
+            ...updatedCapacities
+          }
+        };
+        console.log('Profile to be saved:', newProfile);
+        await saveUserProfile(newProfile);
+      }
+
+      console.log('Showing success alert');
+      Alert.alert('Success', 'Workout and profile updated successfully!');
+
+      setSuggestion(null);
+      setResult('');
+      setUserFeedback('');
+      console.log('handleEndWorkout: finished successfully');
+    } catch (error) {
+      console.error('handleEndWorkout: error', error);
+      Alert.alert('Error', 'Something went wrong while saving your workout. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (hasPermission === null) {
@@ -218,7 +277,7 @@ export const ScanWorkoutScreen = () => {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2196F3" />
-          <Text style={styles.loadingText}>Analyzing workout...</Text>
+          <Text style={styles.loadingText}>Processing your workout...</Text>
         </View>
       </SafeAreaView>
     );
@@ -238,6 +297,7 @@ export const ScanWorkoutScreen = () => {
             placeholder="Enter your result (e.g., 4 rounds + 12 reps)"
             value={result}
             onChangeText={setResult}
+            editable={!isLoading}
           />
           
           <TextInput
@@ -245,9 +305,10 @@ export const ScanWorkoutScreen = () => {
             placeholder="How did it feel? (e.g., Thrusters were tough, pull-ups unbroken, breathing hard at the end)"
             value={userFeedback}
             onChangeText={setUserFeedback}
+            editable={!isLoading}
           />
           
-          <TouchableOpacity style={styles.button} onPress={handleEndWorkout}>
+          <TouchableOpacity style={styles.button} onPress={handleEndWorkout} disabled={isLoading}>
             <Text style={styles.buttonText}>End Workout</Text>
           </TouchableOpacity>
         </View>

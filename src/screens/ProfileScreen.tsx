@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { UserProfile } from '../types';
 import { getUserProfile, saveUserProfile } from '../utils/storage';
+import { useFocusEffect } from '@react-navigation/native';
 
 export const ProfileScreen = () => {
   const [isEditing, setIsEditing] = useState(false);
@@ -13,9 +14,11 @@ export const ProfileScreen = () => {
     weight: 0,
   });
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadProfile();
+    }, [])
+  );
 
   const loadProfile = async () => {
     const savedProfile = await getUserProfile();
@@ -33,6 +36,7 @@ export const ProfileScreen = () => {
     await saveUserProfile(profile);
     setIsEditing(false);
     Alert.alert('Success', 'Profile updated successfully');
+    loadProfile(); // Ensure UI updates after save
   };
 
   const renderField = (label: string, value: string | number, key: keyof UserProfile) => (
@@ -69,6 +73,17 @@ export const ProfileScreen = () => {
       {renderField('Email', profile.email, 'email')}
       {renderField('Age', profile.age, 'age')}
       {renderField('Weight (kg)', profile.weight, 'weight')}
+
+      {/* Always display capacities, with fallback values if missing */}
+      <View style={styles.capacitiesContainer}>
+        <Text style={styles.capacitiesTitle}>Athlete Capacities (AI-managed)</Text>
+        <Text style={styles.capacityItem}>Strength: {(profile.capacities?.strength)}</Text>
+        <Text style={styles.capacityItem}>Power: {(profile.capacities?.power)}</Text>
+        <Text style={styles.capacityItem}>Muscular Endurance: {(profile.capacities?.muscularEndurance)}</Text>
+        <Text style={styles.capacityItem}>Aerobic Capacity: {(profile.capacities?.aerobicCapacity)}</Text>
+        <Text style={styles.capacityItem}>Anaerobic Capacity: {(profile.capacities?.anaerobicCapacity)}</Text>
+        <Text style={styles.capacityItem}>Gymnastics Skill: {(profile.capacities?.gymnasticsSkill)}</Text>
+      </View>
 
       {isEditing && (
         <View style={styles.sexSelector}>
@@ -185,5 +200,23 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  capacitiesContainer: {
+    backgroundColor: '#e3f2fd',
+    padding: 16,
+    borderRadius: 8,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  capacitiesTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1976D2',
+    marginBottom: 8,
+  },
+  capacityItem: {
+    fontSize: 15,
+    color: '#333',
+    marginBottom: 2,
   },
 }); 
