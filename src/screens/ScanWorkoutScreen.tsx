@@ -15,7 +15,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Workout, WorkoutSuggestion, UserProfile } from '../types';
 import { saveWorkout, getUserProfile, saveUserProfile } from '../utils/storage';
-import { analyzeWorkoutWithPhoto, updateAthleteProfileWithAI } from '../utils/ai';
+import { analyzeWorkoutWithPhoto, submitWorkoutResult } from '../utils/ai';
 
 const CameraView = ({ onCapture }: { onCapture: (imageUri: string) => void }) => {
   const takePicture = async () => {
@@ -145,17 +145,23 @@ export const ScanWorkoutScreen = () => {
   const handleCapture = async (imageUri: string) => {
     setIsLoading(true);
     try {
-      if (!userProfile) throw new Error('User profile not loaded');
-      const aiResponse = await analyzeWorkoutWithPhoto(imageUri, {
-        sex: userProfile.sex,
-        age: userProfile.age,
-        bodyWeight: userProfile.weight,
-        capacities: userProfile.capacities!,
-      });
+      const aiResponse = await analyzeWorkoutWithPhoto(imageUri);
       setSuggestion(aiResponse);
     } catch (error) {
       console.error('Error analyzing workout:', error);
-      Alert.alert('Error', 'Failed to analyze workout. Please try again.');
+      
+      if (error instanceof Error && error.message.includes('Authentication failed')) {
+        Alert.alert(
+          'Session Expired', 
+          'Your session has expired. Please log in again.',
+          [{ text: 'OK', onPress: () => {
+            // The authentication error has already been handled by clearing the token
+            // The app should automatically redirect to login
+          }}]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to analyze workout. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -182,54 +188,13 @@ export const ScanWorkoutScreen = () => {
 
       await saveWorkout(workout);
 
-      // Update athlete profile with AI
-      const userProfile = await getUserProfile();
-      if (userProfile && suggestion && userProfile.capacities) {
-        console.log('Calling updateAthleteProfileWithAI with:', {
-          user: {
-            sex: userProfile.sex,
-            age: userProfile.age,
-            bodyWeight: userProfile.weight,
-            capacities: userProfile.capacities,
-          },
-          workout: {
-            parsedWorkout: suggestion.workout,
-            recommendedWeights: suggestion.suggestedWeights,
-            goal: suggestion.goal,
-          },
-          performance: {
-            result: result,
-            userFeedback: userFeedback,
-          },
+      // Submit workout result to API
+      if (suggestion?.workoutId) {
+        await submitWorkoutResult({
+          workout_id: suggestion.workoutId,
+          result: result,
+          userFeedback: userFeedback,
         });
-        const updatedCapacities = await updateAthleteProfileWithAI({
-          user: {
-            sex: userProfile.sex,
-            age: userProfile.age,
-            bodyWeight: userProfile.weight,
-            capacities: userProfile.capacities,
-          },
-          workout: {
-            parsedWorkout: suggestion.workout,
-            recommendedWeights: suggestion.suggestedWeights,
-            goal: suggestion.goal,
-          },
-          performance: {
-            result: result,
-            userFeedback: userFeedback,
-          },
-        });
-        console.log('AI returned updated capacities:', updatedCapacities);
-        console.log('Profile before update:', userProfile);
-        const newProfile = {
-          ...userProfile,
-          capacities: {
-            ...userProfile.capacities,
-            ...updatedCapacities
-          }
-        };
-        console.log('Profile to be saved:', newProfile);
-        await saveUserProfile(newProfile);
       }
 
       console.log('Showing success alert');
@@ -290,6 +255,18 @@ export const ScanWorkoutScreen = () => {
           <Text style={styles.title}>Workout Suggestion</Text>
           <Text style={styles.workoutText}>{suggestion.workout}</Text>
           <Text style={styles.goalText}>Goal: {suggestion.goal}</Text>
+          
+          {suggestion.suggestedWeights && Object.keys(suggestion.suggestedWeights).length > 0 && (
+            <View style={styles.weightsContainer}>
+              <Text style={styles.weightsTitle}>Recommended Weights:</Text>
+              {Object.entries(suggestion.suggestedWeights).map(([exercise, weight]) => (
+                <Text key={exercise} style={styles.weightText}>
+                  • {exercise}: {weight}
+                </Text>
+              ))}
+            </View>
+          )}
+          
           <Text style={styles.strategyText}>Strategy: {suggestion.strategy}</Text>
           
           <TextInput
@@ -404,5 +381,24 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
     color: '#666',
+  },
+  weightsContainer: {
+    backgroundColor: '#e8f5e8',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  weightsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2E7D32',
+    marginBottom: 8,
+  },
+  weightText: {
+    fontSize: 15,
+    color: '#2E7D32',
+    marginBottom: 4,
   },
 });

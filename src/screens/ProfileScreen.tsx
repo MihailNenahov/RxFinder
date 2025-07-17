@@ -2,9 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { UserProfile } from '../types';
 import { getUserProfile, saveUserProfile } from '../utils/storage';
+import { logout } from '../utils/auth';
 import { useFocusEffect } from '@react-navigation/native';
 
-export const ProfileScreen = () => {
+interface ProfileScreenProps {
+  onLogout?: () => Promise<void>;
+}
+
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState<UserProfile>({
     name: '',
@@ -116,6 +121,23 @@ export const ProfileScreen = () => {
           <Text style={styles.saveButtonText}>Save Changes</Text>
         </TouchableOpacity>
       )}
+
+      {onLogout && (
+        <TouchableOpacity 
+          style={styles.logoutButton} 
+          onPress={async () => {
+            try {
+              console.log('User initiated logout');
+              await onLogout();
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout');
+            }
+          }}
+        >
+          <Text style={styles.logoutButtonText}>Logout</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -218,5 +240,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#333',
     marginBottom: 2,
+  },
+  logoutButton: {
+    backgroundColor: '#f44336',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 30,
+  },
+  logoutButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 }); 

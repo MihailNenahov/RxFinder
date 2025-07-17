@@ -4,6 +4,7 @@ export interface UserProfile {
   sex: 'male' | 'female';
   age: number;
   weight: number;
+  birthday?: string; // For onboarding
   capacities?: {
     strength: number;
     power: number;
@@ -13,6 +14,28 @@ export interface UserProfile {
     gymnasticsSkill: number;
   };
 }
+
+// Authentication related types
+export interface AuthState {
+  isLoggedIn: boolean;
+  isLoading: boolean;
+}
+
+export interface SignupData {
+  email: string;
+  password: string;
+  name: string;
+  sex: 'male' | 'female';
+  birthday: string; // YYYY-MM-DD format
+  weight: number;
+}
+
+export interface LoginData {
+  email: string;
+  password: string;
+}
+
+
 
 export interface Workout {
   id: string;
@@ -34,4 +57,5 @@ export interface WorkoutSuggestion {
     [key: string]: string;
   };
   strategy: string;
+  workoutId?: string; // Optional for backward compatibility
 } 
